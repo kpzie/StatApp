@@ -1,7 +1,7 @@
 /* Offline cache for the installable web version. Bump CACHE when files change. */
-const CACHE = 'statline-v1.0.0';
+const CACHE = 'statline-v1.1.0';
 const FILES = [
-  './', './index.html', './css/styles.css', './js/stats.js', './js/app.js',
+  './', './index.html', './css/styles.css', './js/stats.js', './js/ai.js', './js/app.js',
   './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'
 ];
 self.addEventListener('install', e => {

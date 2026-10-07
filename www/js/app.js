@@ -4,7 +4,7 @@
   const SL = window.StatLine;
   const SPORTS = SL.SPORTS;
   const STORE_KEY = 'statline.v1';
-  const APP_VERSION = '1.0.0';
+  const APP_VERSION = '1.1.0';
 
   // ---------- tiny DOM helper ----------
   function h(tag, attrs) {
@@ -340,6 +340,7 @@
         h('div', { class: 'small muted' }, [p.side ? S.sideLabel + ': ' + p.side : '', p.height].filter(Boolean).join(' · '))))));
     if (p.notes) w.append(h('div', { class: 'card small' }, p.notes));
     w.append(h('button', { class: 'primary block', onclick: function () { go('#/newgame/' + id); } }, '▶ Start new game'));
+    w.append(h('button', { class: 'block', style: 'margin-top:8px', onclick: function () { aiSheet(p, {}); } }, '✨ AI analysis' + (p.ai ? ' (saved)' : '')));
 
     w.append(h('h2', null, 'Performance'));
     w.append(h('div', { class: 'seg' },
@@ -547,6 +548,7 @@
       const notes = h('textarea', { placeholder: 'Game notes…' }); notes.value = g.notes || '';
       notes.addEventListener('change', function () { g.notes = notes.value; save(); });
       w.append(h('h2', null, 'Notes'), notes);
+      if (player(g.playerId)) w.append(h('button', { class: 'block', style: 'margin-top:12px', onclick: function () { aiSheet(player(g.playerId), { game: g }); } }, '✨ Analyze this game' + (g.ai ? ' (saved)' : '')));
       w.append(h('div', { class: 'btn-row', style: 'margin-top:16px' },
         h('button', { onclick: function () { editTotals(g, function () { viewGame(id); }); } }, '✎ Edit totals'),
         h('button', { onclick: function () { g.status = 'live'; save(); viewGame(id); } }, '↻ Reopen')));
@@ -643,6 +645,117 @@
     } catch (e) { toast('Export failed: ' + (e && e.message ? e.message : e)); }
   }
 
+
+  // ---------- AI analysis (bring-your-own Anthropic API key) ----------
+  const AI_KEY = 'statline.ai.v1';   // { key, model, anonymize } — never part of backups
+  function aiCfg() {
+    let c = {};
+    try { c = JSON.parse(localStorage.getItem(AI_KEY) || '{}') || {}; } catch (e) { c = {}; }
+    return { key: c.key || '', model: c.model || window.StatLineAI.DEFAULT_MODEL, anonymize: c.anonymize !== false };
+  }
+  function aiSave(c) {
+    try { localStorage.setItem(AI_KEY, JSON.stringify(c)); } catch (e) { toast('⚠️ Could not save AI settings'); }
+  }
+  function aiRender(text) {
+    const box = h('div', { class: 'ai-out' });
+    window.StatLineAI.parseMarkdown(text).forEach(function (n) {
+      const runs = (n.runs || []).map(function (r) { return r.b ? h('b', null, r.text) : r.text; });
+      if (n.t === 'h') box.append(h('h4', null, n.text));
+      else if (n.t === 'li') box.append(h('div', { class: 'ai-li' }, h('span', null, '•'), h('div', null, runs)));
+      else box.append(h('p', null, runs));
+    });
+    return box;
+  }
+  function copyText(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(function () { toast('Copied'); }, function () { toast('Copy failed'); }); return; }
+    } catch (e) { /* fall through */ }
+    toast('Copy not available');
+  }
+  // target = the player or game object; analysis is stored at target.ai = {text, model, at, focus}
+  function aiSheet(p, opts) {
+    const AI = window.StatLineAI;
+    const cfg = aiCfg();
+    const target = opts.game || p;
+    const finals = playerGames(p.id).filter(function (g) { return g.status === 'final'; });
+    const body = h('div', null);
+    if (!cfg.key) {
+      body.append(h('p', { class: 'small' }, 'AI analysis needs your own Anthropic API key. Add it once in Data ▸ AI analysis.'),
+        h('button', { class: 'primary block', onclick: function () { closeSheet(); go('#/settings'); } }, 'Open AI settings'));
+      openSheet('✨ AI analysis', body); return;
+    }
+    if (!finals.length) {
+      body.append(h('p', { class: 'small' }, 'Finish at least one game first — the analysis uses completed games only.'));
+      openSheet('✨ AI analysis', body); return;
+    }
+    let focus = opts.game ? 'game' : 'overview';
+    const result = h('div');
+    const q = h('textarea', { placeholder: 'Optional question, e.g. “Why is my shooting inconsistent?”', maxlength: '500' });
+    const seg = h('div', { class: 'seg' });
+    const foci = opts.game ? ['game', 'training'] : ['overview', 'strengths', 'training', 'scouting'];
+    function drawSeg() {
+      seg.textContent = '';
+      foci.forEach(function (k) {
+        seg.append(h('button', { class: focus === k ? 'on' : '', onclick: function () { focus = k; drawSeg(); } }, AI.FOCI[k].label));
+      });
+    }
+    drawSeg();
+    function showSaved() {
+      result.textContent = '';
+      if (target.ai && target.ai.text) {
+        result.append(h('div', { class: 'small muted', style: 'margin:8px 0' },
+          'Saved analysis · ' + (AI.FOCI[target.ai.focus] ? AI.FOCI[target.ai.focus].label : '') + ' · ' + target.ai.model + ' · ' + new Date(target.ai.at).toLocaleString()),
+          aiRender(target.ai.text),
+          h('div', { class: 'btn-row' }, h('button', { onclick: function () { copyText(target.ai.text); } }, 'Copy')));
+      }
+    }
+    let busy = false;
+    const run = h('button', { class: 'primary block' }, '✨ Analyze');
+    run.addEventListener('click', function () {
+      if (busy) return;
+      busy = true; run.disabled = true; run.textContent = 'Analyzing…';
+      result.textContent = ''; result.append(h('div', { class: 'small muted', style: 'margin:10px 0' }, 'Asking Claude… this can take 10–30 seconds.'));
+      const c = aiCfg();
+      const payload = AI.buildPayload(p, playerGames(p.id), { anonymize: c.anonymize, gameId: opts.game ? opts.game.id : null });
+      AI.callClaude({ key: c.key, model: c.model, user: AI.buildUserMessage(payload, { focus: focus, question: q.value }) })
+        .then(function (text) {
+          target.ai = { text: text, model: c.model, at: Date.now(), focus: focus }; save();
+          showSaved();
+        })
+        .catch(function (err) {
+          result.textContent = '';
+          result.append(h('div', { class: 'card small', style: 'border-color:var(--danger,#e5484d)' }, '⚠️ ' + err.message));
+          if (target.ai) result.append(h('div', { class: 'small muted' }, 'Showing your last saved analysis below.'), aiRender(target.ai.text));
+        })
+        .then(function () { busy = false; run.disabled = false; run.textContent = '✨ Analyze'; });
+    });
+    body.append(seg, q, run,
+      h('div', { class: 'small muted', style: 'margin:8px 0' },
+        'Sends this player’s stats (' + (cfg.anonymize ? 'name hidden' : 'with name') + ', no notes) to Anthropic using your key. AI can make mistakes — treat it as a second opinion.'),
+      result);
+    showSaved();
+    openSheet('✨ AI analysis' + (opts.game ? ' · this game' : ''), body);
+  }
+
+  function aiSettingsCard() {
+    const AI = window.StatLineAI;
+    const cfg = aiCfg();
+    const key = h('input', { type: 'password', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', placeholder: 'sk-ant-…', value: cfg.key });
+    const model = h('select', null, AI.MODELS.map(function (m) { return h('option', { value: m.id, selected: m.id === cfg.model }, m.label); }));
+    model.value = cfg.model;
+    const anon = h('input', { type: 'checkbox', checked: cfg.anonymize });
+    const card = h('div', { class: 'card' },
+      h('label', { class: 'field' }, h('span', null, 'Anthropic API key'), key),
+      h('label', { class: 'field' }, h('span', null, 'Model'), model),
+      h('label', { class: 'check' }, anon, h('span', null, 'Hide player names from the AI (recommended)')),
+      h('div', { class: 'btn-row' },
+        h('button', { onclick: function () { aiSave({ key: '', model: model.value, anonymize: anon.checked }); key.value = ''; toast('API key removed'); } }, 'Remove key'),
+        h('button', { class: 'primary', onclick: function () { aiSave({ key: key.value.trim(), model: model.value, anonymize: anon.checked }); toast('AI settings saved'); } }, 'Save')),
+      h('div', { class: 'small muted' },
+        'Get a key at console.anthropic.com. It is stored only on this device, is not included in backups, and is sent only to api.anthropic.com. Each analysis uses a small amount of your API credit. Player stats (and the name, if you turn hiding off) leave the device when you run an analysis; notes never do.'));
+    return card;
+  }
+
   function demoData() {
     const mk = function (sport, name, num, pos, team) {
       const p = { id: uid(), created: Date.now(), name: name, sport: sport, number: num, position: pos, team: team, side: '', height: '', notes: 'Demo player' };
@@ -706,6 +819,8 @@
       }
     });
     w.append(fileInput);
+    w.append(h('h2', null, '✨ AI analysis'));
+    w.append(aiSettingsCard());
     w.append(h('h2', null, 'Other'));
     w.append(h('div', { class: 'btn-row' },
       h('button', { onclick: function () { demoData(); toast('Demo data added'); viewSettings(); } }, 'Load demo data'),

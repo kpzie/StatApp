@@ -4,7 +4,7 @@
   "description": "StatLine – individual soccer & basketball game stat tracker (PWA + Android APK via Capacitor)",
   "private": true,
   "scripts": {
-    "test": "node --test tests/stats.test.js",
+    "test": "node --test tests/stats.test.js tests/ai.test.js",
     "serve": "npx --yes http-server www -p 8080 -c-1",
     "assets": "capacitor-assets generate --android --assetPath assets",
     "sync": "cap sync android",

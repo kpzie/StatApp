@@ -151,3 +151,12 @@ table.totals td:last-child { text-align: right; font-variant-numeric: tabular-nu
   opacity: 0; pointer-events: none; transition: .25s; z-index: 80; max-width: 90%;
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* AI analysis */
+.ai-out h4 { margin: 14px 0 6px; font-size: 15px; color: var(--accent); }
+.ai-out p { margin: 6px 0; font-size: 14px; line-height: 1.45; }
+.ai-li { display: flex; gap: 8px; margin: 5px 0; font-size: 14px; line-height: 1.45; }
+.ai-li > span { color: var(--accent); }
+label.check { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 14px; }
+label.check input { width: auto; flex: none; }
+select { width: 100%; }

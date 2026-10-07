@@ -14,6 +14,17 @@ stays on the device.
 * Player profiles (jersey #, position, team, foot/hand, height, notes), game log, last-5 filter,
   per-game trend chart, undo, game clock, editable totals, CSV export, JSON backup/restore.
 
+## AI analysis (bring your own Anthropic API key)
+
+Open **Data ▸ AI analysis**, paste an Anthropic API key (console.anthropic.com), pick a model, and save.
+Then use **✨ AI analysis** on a player profile (overview, strengths & gaps, training plan, scouting report,
+optional free-form question) or **✨ Analyze this game** on a finished game.
+
+* The key is stored only in the device's local storage, is **not** part of backups or CSV exports, and is sent only to `api.anthropic.com`.
+* Only finished games' numbers are sent. Player names are hidden by default (toggle in settings); notes are never sent.
+* The latest analysis is saved with the player/game so it can be re-read offline. Each run uses a little of your API credit.
+* Calls the Messages API directly from the app (`anthropic-dangerous-direct-browser-access`); on Android the Capacitor HTTP plugin is enabled so requests are not blocked by CORS. Anyone who can unlock the phone can read the stored key, so use a key with a spend limit.
+
 ## Get the APK (no Android Studio needed)
 
 1. Create an empty GitHub repository and push this folder to it (`main` branch).
@@ -62,7 +73,7 @@ npm test         # unit tests for every stat formula
 ## Project layout
 
 ```
-www/            the app (index.html, css/, js/stats.js = formulas, js/app.js = UI, sw.js, manifest, vercel.json)
+www/            the app (index.html, css/, js/stats.js = formulas, js/ai.js = AI analysis, js/app.js = UI, sw.js, manifest, vercel.json)
 android/        Capacitor Android project (committed; web files are copied in by `cap sync`)
 assets/         icon + splash sources (regenerate with `npm run assets`)
 tests/          formula tests
