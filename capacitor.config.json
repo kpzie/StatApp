@@ -1,0 +1,9 @@
+{
+  "appId": "com.statline.tracker",
+  "appName": "StatLine",
+  "webDir": "www",
+  "backgroundColor": "#0f1419",
+  "android": {
+    "allowMixedContent": false
+  }
+}

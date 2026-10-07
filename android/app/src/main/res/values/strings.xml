@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">StatLine</string>
+    <string name="title_activity_main">StatLine</string>
+    <string name="package_name">com.statline.tracker</string>
+    <string name="custom_url_scheme">com.statline.tracker</string>
+</resources>
