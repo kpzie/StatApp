@@ -37,6 +37,26 @@ optional free-form question) or **✨ Analyze this game** on a finished game.
 The debug APK is signed with the standard Android debug key, which is fine for installing on your
 own devices. It cannot be uploaded to Google Play; that needs a release build signed with your own key.
 
+## Publish on Google Play (signed .aab)
+
+Play needs a signed Android App Bundle, not the debug APK. CI builds one automatically once you add signing secrets.
+
+1. **Create an upload key on your own computer** (needs a JDK; keep the file and passwords somewhere safe, e.g. a password manager — never commit it):
+   ```bash
+   keytool -genkeypair -v -storetype PKCS12 -keystore upload-keystore.jks \
+     -alias upload -keyalg RSA -keysize 2048 -validity 10000
+   base64 -w0 upload-keystore.jks > upload-keystore.b64     # macOS: base64 -i upload-keystore.jks
+   ```
+   Use the same password for the store and the key.
+2. **Add three repository secrets** (GitHub repo ▸ Settings ▸ Secrets and variables ▸ Actions):
+   `ANDROID_KEYSTORE_BASE64` (contents of the .b64 file), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`upload` above).
+   Optional: `ANDROID_KEY_PASSWORD` if it differs from the store password.
+3. **Push (or run the workflow).** The run now also uploads **StatLine-release-aab** — download it and unzip to get `app-release.aab`.
+4. **In Play Console**, create the app, accept **Play App Signing** when asked (Google keeps the real app-signing key; your keystore is only the *upload* key, and can be reset via Play support if lost), then upload the `.aab` to a closed-testing track.
+5. `versionCode` is set to the GitHub run number, so every build is accepted as a newer upload. Change `versionName` in `android/app/build.gradle` for user-visible versions.
+
+Without the secrets the workflow still builds the debug APK and skips the .aab.
+
 ## Build the APK yourself (Android Studio)
 
 ```bash

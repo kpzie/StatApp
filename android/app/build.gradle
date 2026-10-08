@@ -1,5 +1,13 @@
 apply plugin: 'com.android.application'
 
+// Release signing is configured only when all four env vars are present (CI injects them from GitHub secrets).
+// Without them, `bundleRelease` still builds but is unsigned, and `assembleDebug` is unaffected.
+def ksPath = System.getenv("STATLINE_KEYSTORE_PATH")
+def ksPass = System.getenv("STATLINE_KEYSTORE_PASSWORD")
+def ksAlias = System.getenv("STATLINE_KEY_ALIAS")
+def ksKeyPass = System.getenv("STATLINE_KEY_PASSWORD") ?: ksPass
+def hasReleaseKey = ksPath && ksPass && ksAlias && file(ksPath).exists()
+
 android {
     namespace = "com.statline.tracker"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +15,9 @@ android {
         applicationId "com.statline.tracker"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Play requires versionCode to increase with every upload; CI passes the run number.
+        versionCode((System.getenv("VERSION_CODE") ?: "1").toInteger())
+        versionName "1.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +25,19 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseKey) {
+            release {
+                storeFile file(ksPath)
+                storePassword ksPass
+                keyAlias ksAlias
+                keyPassword ksKeyPass
+            }
+        }
+    }
     buildTypes {
         release {
+            if (hasReleaseKey) signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
